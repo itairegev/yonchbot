@@ -5,6 +5,32 @@ That pretend phone is called an **emulator**. The bot can't tell the
 difference (remember the costume idea from `device.py`? Same trick,
 one level deeper).
 
+## ⚠️ Which emulator? (learned the hard way)
+
+**Brawl Stars refuses to run on Google's official emulator.** It installs
+fine, but Supercell's protection layer detects the stock emulator and
+exits on the splash screen (an obfuscated `zkvvp.Y: 02` crash in logcat —
+we diagnosed it so you don't have to). This is deliberate on their side.
+
+So the plan is:
+
+- **BlueStacks Air** (free, made for gaming) → runs the actual game.
+  Install: `brew install --cask bluestacks` (asks for the Mac password),
+  or download from bluestacks.com. Then in BlueStacks:
+  Settings → Advanced → enable **Android Debug Bridge (ADB)**. It shows
+  a line like `ADB is listening on 127.0.0.1:64264` — connect with:
+  ```bash
+  adb connect 127.0.0.1:64264     # your port number will differ
+  adb devices                      # should list 127.0.0.1:64264
+  ```
+  Put that same `127.0.0.1:PORT` value into `config.yaml` →
+  `device.serial`. **The port changes every BlueStacks restart**, so
+  re-check it each session.
+- **Google's emulator ("yonchphone", below)** → can't run Brawl Stars,
+  but is still a perfectly good practice phone for Sessions 2–3
+  (screenshots, taps, pixel detective) and for testing the bot's
+  eyes and hands safely.
+
 ## One-time setup (grown-up hands)
 
 ```bash
