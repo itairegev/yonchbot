@@ -44,12 +44,10 @@ computer and the phone talk to each other.
    python3 -m venv .venv && source .venv/bin/activate
    pip install -r requirements.txt
    ```
-4. **Wake up the phone.** On the phone: Settings → About → tap "Build
-   number" 7 times → Developer Options → enable **USB debugging**.
-   Plug in. Yonch types:
-   ```bash
-   adb devices
-   ```
+4. **Wake up the phone.** Follow **`docs/PHONE-SETUP.md`** together — it's a
+   6-step checklist with a "how you know it worked" check after each step
+   (7-tap developer mode, USB debugging, the Allow popup, `adb devices`).
+   Let Yonch do the taps.
 5. **🏆 Victory moment:** the device appears in the list. The computer
    and the phone are talking. Run `python -m yonchbot check` for the
    full green-checkmark experience.

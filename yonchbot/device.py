@@ -28,6 +28,25 @@ class DeviceError(Exception):
     """Something went wrong talking to the phone."""
 
 
+def list_devices(adb_path: str = "adb") -> list[str]:
+    """Return the serials of every connected, ready device.
+
+    Handy when both a real phone and an emulator are plugged in and the
+    bot needs to know there's a choice to make.
+    """
+    try:
+        out = subprocess.run([adb_path, "devices"], capture_output=True,
+                             timeout=15).stdout.decode(errors="replace")
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    serials = []
+    for line in out.splitlines()[1:]:          # skip the "List of devices" header
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == "device":   # ready (not "offline"/"unauthorized")
+            serials.append(parts[0])
+    return serials
+
+
 class AdbDevice:
     """A real Android phone or emulator, controlled through `adb`.
 

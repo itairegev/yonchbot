@@ -51,6 +51,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # 2. phone: enable Developer Options → USB debugging, plug in via USB
+#    Full step-by-step (great as Session 1): docs/PHONE-SETUP.md
 #    No Android phone? Run a virtual one on the Mac: see docs/EMULATOR.md
 adb devices                                # should list your device
 

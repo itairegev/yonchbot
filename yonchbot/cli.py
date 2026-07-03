@@ -52,6 +52,18 @@ def cmd_check(config: dict) -> None:
     else:
         print("  ❌ adb is missing. Install it:  brew install android-platform-tools")
         return
+
+    from .device import list_devices
+    devices = list_devices()
+    if not devices:
+        print("  ❌ no phone found. Plug in via USB, turn on USB debugging,")
+        print("     and tap 'Allow' on the phone. See docs/PHONE-SETUP.md")
+        return
+    if len(devices) > 1 and not config["device"]["serial"]:
+        print(f"  🟡 {len(devices)} devices connected: {', '.join(devices)}")
+        print("     Pick one: put its serial in config.yaml → device.serial")
+        print("     (having both a phone AND the emulator plugged in does this)")
+
     try:
         device = make_device(config)
         image = device.screenshot()

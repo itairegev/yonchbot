@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from yonchbot import controls
+from yonchbot import controls, device as device_module
 from yonchbot.dashboard import build_dashboard, games_per_day
-from yonchbot.device import ReplayDevice
+from yonchbot.device import ReplayDevice, list_devices
 from yonchbot.progress import Diary
 from tests.conftest import make_screen
 
@@ -62,6 +62,39 @@ def test_games_per_day_counts_correctly():
         {"when": "2026-07-11T09:00:00"},
     ]
     assert games_per_day(games) == [("2026-07-10", 2), ("2026-07-11", 1)]
+
+
+# ---------- listing connected phones ----------
+
+class FakeProc:
+    def __init__(self, text):
+        self.stdout = text.encode()
+
+
+def test_list_devices_reads_ready_phones(monkeypatch):
+    output = (
+        "List of devices attached\n"
+        "R58M20ABCDE\tdevice\n"          # a real phone, ready
+        "emulator-5554\tdevice\n"        # an emulator, ready
+        "R99OFFLINE99\toffline\n"        # not ready - should be skipped
+        "R11UNAUTH11\tunauthorized\n"    # didn't tap Allow - should be skipped
+    )
+    monkeypatch.setattr(device_module.subprocess, "run",
+                        lambda *a, **k: FakeProc(output))
+    assert list_devices() == ["R58M20ABCDE", "emulator-5554"]
+
+
+def test_list_devices_when_none_connected(monkeypatch):
+    monkeypatch.setattr(device_module.subprocess, "run",
+                        lambda *a, **k: FakeProc("List of devices attached\n\n"))
+    assert list_devices() == []
+
+
+def test_list_devices_when_adb_missing(monkeypatch):
+    def boom(*a, **k):
+        raise FileNotFoundError
+    monkeypatch.setattr(device_module.subprocess, "run", boom)
+    assert list_devices() == []
 
 
 # ---------- the joystick math ----------
