@@ -1,0 +1,43 @@
+# YonchBot settings - the bot's control panel.
+# Change numbers here, save, and run the bot again. No code needed!
+#
+# All screen positions (x, y) are in PIXELS, counted from the TOP-LEFT
+# corner of the screen. Use `python -m yonchbot screenshot` and open the
+# picture to measure positions for YOUR device.
+
+device:
+  # Leave empty to use the only connected device.
+  # If `adb devices` shows several, put the serial number here.
+  serial: ""
+
+vision:
+  templates_dir: "assets/templates"
+  # How sure the bot must be before it believes it found a button (0-1).
+  # Session 4 of the mentor guide is all about playing with this number.
+  match_threshold: 0.85
+
+match:
+  # Where the movement joystick sits. On most phones it's the lower-left.
+  # Measure yours! (landscape mode: width ~2400, height ~1080 is common)
+  joystick_anchor: [400, 800]
+  # Where the attack button sits (lower-right).
+  attack_button: [2100, 820]
+  # How the bot walks: circle, zigzag, bush_camper, or headless_chicken.
+  # (Add your own in yonchbot/play.py!)
+  pattern: "circle"
+  joystick_distance: 150     # how far to push the joystick (pixels)
+  joystick_hold_ms: 900      # how long each push lasts (milliseconds)
+  attack_every_steps: 3      # attack once every N walking steps
+
+timing:
+  seconds_between_looks: 1.0   # how often the bot checks the screen
+
+safety:
+  max_games: 3                    # never play more than this per run
+  give_up_after_unknowns: 8       # stop if confused this many times in a row
+  safe_tap_spot: [1200, 1000]     # a boring spot that closes popups safely
+  stuck_screenshots_dir: "data/stuck"
+
+diary:
+  csv_path: "data/games.csv"
+  dashboard_path: "data/progress.html"

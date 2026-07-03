@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+# templates are per-device captures; each family makes their own
+assets/templates/*.png
