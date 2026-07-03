@@ -20,13 +20,15 @@ sdkmanager --install "platform-tools" "emulator" "platforms;android-35" \
 avdmanager create avd --name yonchphone --package \
   "system-images;android-35;google_apis_playstore;arm64-v8a" --device "pixel_7"
 
-# 4. two settings avdmanager gets wrong for our use:
-#    let the Mac keyboard type into the phone, and use the real GPU
-#    (without it, games run in slow-motion software rendering)
+# 4. three settings avdmanager gets wrong for our use:
+#    let the Mac keyboard type into the phone, use the real GPU
+#    (without it, games run in slow-motion software rendering),
+#    and give the phone enough storage for a big game
 sed -i '' \
   -e 's/hw.keyboard=no/hw.keyboard=yes/' \
   -e 's/hw.gpu.enabled=no/hw.gpu.enabled=yes/' \
   -e 's/hw.gpu.mode=auto/hw.gpu.mode=host/' \
+  -e 's/disk.dataPartition.size=6G/disk.dataPartition.size=16G/' \
   ~/.android/avd/yonchphone.avd/config.ini
 ```
 
