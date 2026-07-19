@@ -13,6 +13,7 @@ screen resolution, or the matching scores drop.)
 | `in_match.png` | something that ONLY shows during a match — the ammo bar or the super button works well | a match |
 | `match_end.png` | the EXIT or CONTINUE button on the defeat/victory screen | the end screen |
 | `rewards.png` | the "tap to continue" text on the token/reward screen | the rewards screen |
+| `spectate_exit.png` | the small Exit button while watching another player after you die | spectator mode |
 
 ## How to make one (using the PLAY button as the example)
 

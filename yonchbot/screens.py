@@ -25,6 +25,7 @@ from . import vision
 class Screen(Enum):
     LOBBY = "lobby"            # main menu, PLAY button visible
     IN_MATCH = "in_match"      # we're playing! joystick visible
+    SPECTATE = "spectate"      # we died; watching someone else, small Exit button
     MATCH_END = "match_end"    # victory/defeat screen, EXIT/CONTINUE visible
     REWARDS = "rewards"        # tokens/boxes screen, tap to continue
     UNKNOWN = "unknown"        # no landmark found - a popup? an ad? who knows
@@ -32,8 +33,13 @@ class Screen(Enum):
 
 # Each screen -> the template file that proves we're on it.
 # Order matters: we check top to bottom and take the first hit.
+# A screen may have SEVERAL proofs: match_end is the EXIT button in
+# Showdown, but the PROCEED button in Brawl Ball - same meaning, tap it.
 LANDMARKS = [
     (Screen.MATCH_END, "match_end.png"),
+    (Screen.MATCH_END, "proceed.png"),
+    (Screen.MATCH_END, "lets_go.png"),
+    (Screen.SPECTATE, "spectate_exit.png"),
     (Screen.REWARDS, "rewards.png"),
     (Screen.IN_MATCH, "in_match.png"),
     (Screen.LOBBY, "play_button.png"),
@@ -46,31 +52,33 @@ class ScreenDetector:
     def __init__(self, templates_dir: str | Path, threshold: float = 0.85):
         self.templates_dir = Path(templates_dir)
         self.threshold = threshold
-        self._templates: dict[Screen, np.ndarray] = {}
+        # A list of (screen, template) pairs - a screen can have several.
+        self._entries: list[tuple[Screen, np.ndarray]] = []
+        self._loaded_files: set[str] = set()
         for screen, filename in LANDMARKS:
             path = self.templates_dir / filename
             if path.exists():
-                self._templates[screen] = vision.load_template(path)
+                self._entries.append((screen, vision.load_template(path)))
+                self._loaded_files.add(filename)
 
     @property
     def missing_templates(self) -> list[str]:
         """Which landmark pictures haven't been captured yet?"""
-        have = set(self._templates)
-        return [f for s, f in LANDMARKS if s not in have]
+        return [f for _s, f in LANDMARKS if f not in self._loaded_files]
 
     def which_screen(self, screenshot: np.ndarray) -> Screen:
         """Look at a screenshot and say which screen it is."""
-        for screen, _filename in LANDMARKS:
-            template = self._templates.get(screen)
-            if template is None:
-                continue
+        for screen, template in self._entries:
             if vision.find(screenshot, template, self.threshold) is not None:
                 return screen
         return Screen.UNKNOWN
 
     def find_landmark(self, screenshot: np.ndarray, screen: Screen):
         """Find WHERE a screen's landmark is (so we can tap it)."""
-        template = self._templates.get(screen)
-        if template is None:
-            return None
-        return vision.find(screenshot, template, self.threshold)
+        for entry_screen, template in self._entries:
+            if entry_screen != screen:
+                continue
+            match = vision.find(screenshot, template, self.threshold)
+            if match is not None:
+                return match
+        return None

@@ -21,7 +21,7 @@ def test_reports_missing_templates(tmp_path):
     empty_dir = tmp_path / "no_templates_here"
     empty_dir.mkdir()
     detector = ScreenDetector(empty_dir)
-    assert len(detector.missing_templates) == 4
+    assert len(detector.missing_templates) == 7
 
 
 def test_finds_where_the_play_button_is(templates_dir, fake_screens):

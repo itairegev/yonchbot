@@ -143,6 +143,67 @@ def cmd_play(config: dict, games: int | None) -> None:
     print(f"🏆 Done! Finished {done} game(s). Run `dashboard` to see progress.")
 
 
+def cmd_evolve(config: dict, rounds: int, games_per_side: int) -> None:
+    """The bot experiments on ITSELF: champion vs challenger settings,
+    real games, count the wins, keep whatever wins more."""
+    import subprocess
+
+    from .brain import Brain
+    from .evolve import GENES, Evolution
+    from .progress import Diary
+
+    device = make_device(config)
+    diary = Diary(PROJECT_ROOT / config["diary"]["csv_path"])
+
+    def wake_the_phone() -> None:
+        # Same ritual as the marathon: break doze, dismiss lock, game up.
+        adb = ["adb", "shell"]
+        power = subprocess.run([*adb, "dumpsys", "power"], capture_output=True)
+        if b"mWakefulness=Dozing" in power.stdout:
+            subprocess.run([*adb, "input", "keyevent", "26"])
+        subprocess.run([*adb, "wm", "dismiss-keyguard"], capture_output=True)
+        subprocess.run([*adb, "monkey", "-p", "com.supercell.brawlstars", "1"],
+                       capture_output=True)
+
+    def play_games(settings: dict, n: int) -> int:
+        wake_the_phone()
+        trial_config = {**config, "match": {**config["match"], **settings}}
+        detector = make_detector(trial_config)
+        before = len(diary.read_games())
+        Brain(device, detector, diary, trial_config).run(max_games=n)
+        played = diary.read_games()[before:]
+        return sum(1 for g in played if "WIN" in g["notes"])
+
+    champion = {gene: config["match"][gene] for gene in GENES}
+    print(f"🧬 Evolution: {rounds} rounds x {2 * games_per_side} games. "
+          f"Starting champion: {champion}")
+    lab = Evolution(PROJECT_ROOT / "data" / "evolution.csv")
+    champion = lab.run(champion, rounds, games_per_side, play_games)
+    print(f"🏆 Final champion: {champion}")
+    print("   (put these numbers in config.yaml to make them permanent,")
+    print("    and see data/evolution.csv for every experiment's results)")
+
+
+def cmd_train(config: dict, games: int) -> None:
+    """Let the RL pilot (rl.py - the Karpathy method) fly and LEARN."""
+    from .brain import Brain
+    from .progress import Diary
+
+    trial = {**config, "match": {**config["match"], "pilot": "rl",
+             "policy_path": str(PROJECT_ROOT / "data" / "rl" / "policy.npz")}}
+    device = make_device(trial)
+    detector = make_detector(trial)
+    diary = Diary(PROJECT_ROOT / trial["diary"]["csv_path"])
+    before = len(diary.read_games())
+    brain = Brain(device, detector, diary, trial)
+    print(f"🧠 Training the learning pilot for {games} game(s)...")
+    brain.run(max_games=games)
+    played = diary.read_games()[before:]
+    wins = sum(1 for g in played if "WIN" in g["notes"])
+    print(f"🧠 Session done: {wins}/{len(played)} wins. "
+          "The net remembers everything: data/rl/policy.npz")
+
+
 def cmd_dashboard(config: dict) -> None:
     from .dashboard import build_dashboard
     from .progress import Diary
@@ -166,6 +227,11 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("where")
     p_play = sub.add_parser("play")
     p_play.add_argument("games", type=int, nargs="?", default=None)
+    p_train = sub.add_parser("train")
+    p_train.add_argument("games", type=int, nargs="?", default=10)
+    p_evolve = sub.add_parser("evolve")
+    p_evolve.add_argument("rounds", type=int, nargs="?", default=4)
+    p_evolve.add_argument("games_per_side", type=int, nargs="?", default=4)
     sub.add_parser("dashboard")
 
     args = parser.parse_args(argv)
@@ -186,6 +252,10 @@ def main(argv: list[str] | None = None) -> None:
             cmd_where(config)
         elif args.command == "play":
             cmd_play(config, args.games)
+        elif args.command == "train":
+            cmd_train(config, args.games)
+        elif args.command == "evolve":
+            cmd_evolve(config, args.rounds, args.games_per_side)
         elif args.command == "dashboard":
             cmd_dashboard(config)
     except Exception as e:

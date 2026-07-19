@@ -63,7 +63,8 @@ def test_gives_up_when_too_confused(config, templates_dir, fake_screens):
 def test_taps_through_rewards_screen(config, templates_dir, fake_screens):
     frames = [
         fake_screens["rewards"],
-        fake_screens["match_end"],
+        fake_screens["in_match"],    # play at least one step - end screens
+        fake_screens["match_end"],   # only count for games we PLAYED
     ]
     brain, device, diary = make_brain(frames, config, templates_dir)
 
@@ -72,3 +73,22 @@ def test_taps_through_rewards_screen(config, templates_dir, fake_screens):
     assert games_done == 1
     safe_spot = tuple(config["safety"]["safe_tap_spot"])
     assert ("tap", *safe_spot) in device.actions
+
+
+def test_leftover_end_screen_does_not_count_as_a_game(config, templates_dir, fake_screens):
+    """An end screen we never played for gets cleared, not celebrated."""
+    frames = [
+        fake_screens["match_end"],   # leftovers from before we started!
+        fake_screens["lobby"],
+        fake_screens["in_match"],
+        fake_screens["in_match"],
+        fake_screens["match_end"],   # this one WE earned
+    ]
+    brain, device, diary = make_brain(frames, config, templates_dir)
+
+    games_done = brain.run(max_games=1)
+
+    assert games_done == 1
+    games = diary.read_games()
+    assert len(games) == 1                    # exactly one real game logged
+    assert games[0]["steps_played"] == "2"    # the one we actually played

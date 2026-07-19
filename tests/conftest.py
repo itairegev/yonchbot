@@ -20,6 +20,9 @@ SEEDS = {
     "in_match.png": 2,
     "match_end.png": 3,
     "rewards.png": 4,
+    "spectate_exit.png": 5,
+    "proceed.png": 6,
+    "lets_go.png": 7,
 }
 
 
@@ -69,6 +72,7 @@ def config(tmp_path, templates_dir):
         "match": {
             "joystick_anchor": [100, 300],
             "attack_button": [550, 310],
+            "super_button": [500, 250],
             "pattern": "circle",
             "joystick_distance": 80,
             "joystick_hold_ms": 500,

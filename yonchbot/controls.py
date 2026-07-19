@@ -47,3 +47,29 @@ def joystick_push(device, anchor: tuple[int, int], angle_degrees: float,
 def attack(device, button: tuple[int, int]) -> None:
     """Tap the attack button. Brawl Stars auto-aims at the closest enemy."""
     device.tap(*button)
+
+
+def aim_and_shoot(device, button: tuple[int, int], angle_degrees: float,
+                  distance: int = 280, hold_ms: int = 350) -> None:
+    """Drag the attack button in a direction and let go = an AIMED shot.
+
+    A tap (see `attack`) lets the game pick a target. But if you DRAG
+    the attack button, YOU choose the direction - and the shot fires the
+    moment you let go. Same trigonometry as walking, different thumb.
+    """
+    bx, by = button
+    radians = math.radians(angle_degrees)
+    end_x = round(bx + distance * math.cos(radians))
+    end_y = round(by - distance * math.sin(radians))  # y counts downward!
+    device.swipe(bx, by, end_x, end_y, ms=hold_ms)
+
+
+def fire_super(device, super_button: tuple[int, int], angle_degrees: float,
+               distance: int = 280, hold_ms: int = 350) -> None:
+    """Unleash the SUPER in a chosen direction.
+
+    Works exactly like an aimed shot, but dragged from the super button
+    (the skull). Only makes sense when the button is glowing - check
+    with vision.super_is_ready first!
+    """
+    aim_and_shoot(device, super_button, angle_degrees, distance, hold_ms)

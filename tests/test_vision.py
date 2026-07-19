@@ -38,3 +38,23 @@ def test_low_threshold_makes_the_bot_gullible():
     landmark = make_landmark(seed=42)
 
     assert vision.find(screen, landmark, threshold=0.0) is not None
+
+
+def test_sees_red_health_bars():
+    """Enemies and loot boxes wear wide short red bars - find them!"""
+    screen = make_screen(None)
+    screen[100:112, 200:300] = (40, 20, 230)  # a 100x12 bright red bar (BGR!)
+
+    bars = vision.find_red_bars(screen)
+
+    assert len(bars) == 1
+    x, y = bars[0]
+    assert abs(x - 250) <= 2 and abs(y - 106) <= 2  # middle of our bar
+
+
+def test_ignores_red_things_that_are_not_bars():
+    """The attack button is red too - but it's round-ish, not bar-shaped."""
+    screen = make_screen(None)
+    screen[100:160, 200:260] = (40, 20, 230)  # a 60x60 red BLOB, not a bar
+
+    assert vision.find_red_bars(screen) == []
