@@ -60,6 +60,51 @@ def test_gives_up_when_too_confused(config, templates_dir, fake_screens):
     assert len(os.listdir(stuck_dir)) == config["safety"]["give_up_after_unknowns"]
 
 
+def test_wrong_game_mode_gives_up_instead_of_looping(config, templates_dir, fake_screens):
+    """The endless-'Stopping' bug of 2026-07-22: the bot ANNOUNCED it was
+    stopping (mode switch kept failing) but the give-up check only ran on
+    unknown screens - so it looped forever. Giving up must actually stop."""
+    import cv2
+    from tests.conftest import make_landmark
+
+    # Football mode, but the football banner NEVER appears on the lobby.
+    cv2.imwrite(str(templates_dir / "football_banner.png"), make_landmark(seed=55))
+    cv2.imwrite(str(templates_dir / "football_card.png"), make_landmark(seed=56))
+    config["match"]["football"] = True
+    config["match"]["event_banner_spot"] = [600, 350]
+    config["match"]["football_card_spot"] = [400, 200]
+    config["match"]["trophies_tab_spot"] = [300, 340]
+
+    frames = [fake_screens["lobby"]] * 100  # the lobby never changes
+    brain, device, diary = make_brain(frames, config, templates_dir)
+
+    games_done = brain.run(max_games=1)  # must RETURN, not spin forever
+
+    assert games_done == 0
+    # and it tried the mode switch only a handful of times before quitting
+    banner_taps = [a for a in device.actions if a == ("tap", 600, 350)]
+    assert len(banner_taps) <= 6
+
+
+def test_scoreboard_decides_the_winner(config, templates_dir, fake_screens):
+    """We led 1-0 when the game ended: that's a WIN - no matter what
+    screens come after. (The 'highlight screen' bug of 2026-07-22: the
+    VICTORY banner hides behind a replay screen, so trusting only the
+    banner logged half a day of wins as losses.)"""
+    frames = [
+        fake_screens["in_match"],
+        fake_screens["match_end"],
+    ]
+    brain, device, diary = make_brain(frames, config, templates_dir)
+    brain._last_scores = (1, 0)   # what the scoreboard said during play
+
+    brain.run(max_games=1)
+
+    games = diary.read_games()
+    assert "WIN" in games[0]["notes"]
+    assert "1-0" in games[0]["notes"]
+
+
 def test_taps_through_rewards_screen(config, templates_dir, fake_screens):
     frames = [
         fake_screens["rewards"],

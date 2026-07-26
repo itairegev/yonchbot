@@ -32,23 +32,69 @@ match:
   # The bot's tunable "genes" - `python -m yonchbot evolve` experiments
   # on these BY ITSELF and keeps whatever wins more games:
   kick_range: 220            # how close to the ball before kicking north
-  shoot_range: 0.45          # shooting distance, as a slice of screen width
-  step_hold_ms: 300          # how long each in-combat step lasts (ms)
+  shoot_range: 0.45          # punching/shooting distance, as a slice of screen
+                             # width. Raised from 0.12 (2026-07-25): in the
+                             # Daily Contest score-attack variant the old tiny
+                             # reach meant the bot almost never fired. This
+                             # wider reach makes it CHOOSE to fight and shoot at
+                             # nearly any on-screen enemy. (Note: for a real
+                             # short-armed brawler like Edgar, 0.12 was correct
+                             # - lower it back if you play regular Brawl Ball.)
+  step_hold_ms: 1100         # how long each in-combat step lasts (ms) -
+                             # the walk runs in the BACKGROUND now, so a
+                             # longer step no longer freezes the thinking
+  bullet_speed: 2000         # how fast our shots fly (pixels per second) -
+                             # used to aim AHEAD of running enemies
+  enemy_speed_cap: 450       # nobody runs faster than this (px/s) - protects
+                             # the aim from jittery readings
   # Where to tap to fix the game mode if something switched it:
   event_banner_spot: [1487, 992]   # the mode banner on the lobby
-  football_card_spot: [979, 415]   # the Brawl Ball card in the browser
+  football_card_spot: [910, 580]   # the Brawl Ball card in the browser
+  trophies_tab_spot: [780, 1026]   # the TROPHIES tab at the browser's bottom -
+                                   # new seasons open the browser on their own
+                                   # special page, and football hides in here
   joystick_distance: 150     # how far to push the joystick (pixels)
-  joystick_hold_ms: 700      # how long each push lasts (milliseconds)
+  joystick_hold_ms: 1300     # how long each push lasts (ms) - roughly one
+                             # full think-loop, so walks touch end-to-end
+                             # and the brawler (almost) never stands still
   attack_every_steps: 3      # attack once every N walking steps
 
+  # Where each team's score digit lives on the top bars [x, y, w, h] -
+  # the bot reads these to know when a goal happens (and who scored!)
+  score_left_box: [150, 15, 150, 80]
+  score_right_box: [2080, 10, 160, 80]
+
+# The learning pilot (rl.py). Run it with:  python -m yonchbot train
+rl:
+  policy_path: "data/rl/policy.npz"     # the net's saved brain
+  demos_path: "data/rl/demos.jsonl"     # the rulebook's diary (its homework)
+  human_demos_path: "data/rl/human_demos.jsonl"  # tactics read off recorded
+                                        # HUMAN games - the good stuff,
+                                        # studied three times as hard
+  log_demos: true       # rule-bot games write the diary automatically
+  macro_beats: 3        # the pilot picks a new tactic every N heartbeats
+  gamma: 0.9            # how much the future counts (per macro-step)
+  learn_rate: 0.001
+  bc_weight: 0.1        # how hard the safety line pulls back to the rulebook
+  # The report card (the coach's grading philosophy, 2026-07-22):
+  # a WIN is the whole team's grade - random teammates share it. A landed
+  # punch is OURS alone. So punches lead, goals give context, wins count 0.
+  reward_hit: 1.0       # each punch that visibly shrank an enemy health bar
+  reward_goal: 2.0      # goals still matter - a bot that only punches and
+                        # never plays the ball is the #1 beginner mistake
+  reward_win: 0.0       # team grade - set above 0 to bring it back
+
 timing:
-  seconds_between_looks: 0.3   # how often the bot checks the screen
+  seconds_between_looks: 0.05  # how often the bot checks the screen -
+                               # taking the screenshot is slow enough on
+                               # its own, no extra napping needed
 
 safety:
   max_games: 50                  # never play more than this per run
-  give_up_after_unknowns: 25      # stop if confused this many times in a row
-                                  # (the death animation alone eats ~10 - with
-                                  #  the fast heartbeat, patience is a virtue)
+  give_up_after_unknowns: 40      # stop if confused this many times in a row
+                                  # (the heartbeat got ~3x faster in the 2026-07-22
+                                  #  speed-up, so waiting screens eat more counts -
+                                  #  death animations and matchmaking need patience)
   safe_tap_spot: [700, 600]       # a boring spot that closes popups safely
                                   # (careful: bottom-center is NOT safe - it
                                   #  sits on the lobby's event banner!)

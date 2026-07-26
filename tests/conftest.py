@@ -18,6 +18,7 @@ LANDMARK_W, LANDMARK_H = 60, 40
 SEEDS = {
     "play_button.png": 1,
     "in_match.png": 2,
+    "in_match_ready.png": 8,
     "match_end.png": 3,
     "rewards.png": 4,
     "spectate_exit.png": 5,
@@ -41,6 +42,24 @@ def make_screen(landmark: np.ndarray | None, pos: tuple[int, int] = (300, 150),
     return screen
 
 
+@pytest.fixture(autouse=True)
+def fresh_bot_memory():
+    """Wipe the bot's short-term memory before every test.
+
+    play.MEMORY belongs to the module, so without this, one test's
+    match would leak into the next test's match - the same way a real
+    match wipes it at step 0.
+    """
+    from yonchbot import play
+    play.MEMORY.update({"loot_angle": None, "loot_steps": 0, "cubes": 0,
+                        "focus": None, "focus_prev": None, "carry_steps": 0,
+                        "carry_beats": 0, "strafe_flip": False,
+                        "focus_time": None, "focus_prev_time": None,
+                        "last_view": None, "walked": None,
+                        "detour": None, "detour_steps": 0})
+    yield
+
+
 @pytest.fixture
 def templates_dir(tmp_path):
     """A folder with all four landmark templates saved as PNGs."""
@@ -57,6 +76,10 @@ def fake_screens():
     return {
         "lobby": make_screen(make_landmark(SEEDS["play_button.png"])),
         "in_match": make_screen(make_landmark(SEEDS["in_match.png"])),
+        # the attack button changes color with ammo: blue when empty
+        # (in_match.png), yellow when loaded (in_match_ready.png).
+        # BOTH must mean "we're in a match" - see the full-ammo bug!
+        "in_match_ready": make_screen(make_landmark(SEEDS["in_match_ready.png"])),
         "match_end": make_screen(make_landmark(SEEDS["match_end.png"])),
         "rewards": make_screen(make_landmark(SEEDS["rewards.png"])),
         "mystery": make_screen(None, bg_seed=7),

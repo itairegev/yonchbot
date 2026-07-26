@@ -54,6 +54,17 @@ def find_red_bars(screen: np.ndarray) -> list[tuple[int, int]]:
 
     Returns a list of (x, y) centers of the bars we found.
     """
+    return [(x, y) for x, y, _w in find_red_bars_wide(screen)]
+
+
+def find_red_bars_wide(screen: np.ndarray) -> list[tuple[int, int, int]]:
+    """Like find_red_bars, but ALSO reports each bar's width in pixels.
+
+    Why care about width? The red part of a health bar is the health
+    that's LEFT - when an enemy takes a hit, their red bar gets
+    NARROWER. Compare widths between two looks and you know whether
+    your punch landed. The bar is a damage receipt!
+    """
     # HSV is a way of describing color by "which color" (hue) instead of
     # mixing blue+green+red - much easier to say "find RED" in.
     hsv = cv2.cvtColor(screen, cv2.COLOR_BGR2HSV)
@@ -83,7 +94,7 @@ def find_red_bars(screen: np.ndarray) -> list[tuple[int, int]]:
         # mask (before smoothing): at least 60% must be truly red.
         box = strong_red[y:y + h, x:x + w]
         if cv2.countNonZero(box) >= 0.6 * w * h:
-            bars.append((x + w // 2, y + h // 2))
+            bars.append((x + w // 2, y + h // 2, w))
     return bars
 
 
@@ -143,6 +154,62 @@ def super_is_ready(screen: np.ndarray, button_center: tuple[int, int]) -> bool:
     # Trying to fire an uncharged super costs nothing - missing a charged
     # one costs the match.
     return cv2.countNonZero(yellow) > 0.08 * region.shape[0] * region.shape[1]
+
+
+def read_score(screen: np.ndarray, box, digit_templates: dict,
+               floor: float = 0.6) -> int | None:
+    """Read one team's goal count off its score bar.
+
+    box = [x, y, w, h] of the bar area; digit_templates = {0: img, 1: img}.
+    We compare in GRAYSCALE: the digits are bright-on-dark on BOTH bars
+    (ours is blue, theirs is dark red), so one set of pictures reads both.
+    Returns the digit, or None when there's no score on screen (menus,
+    loading, goal cutscenes). Brawl Ball ends at 2 goals and the victory
+    banner tells us about that one - so 0 and 1 are all we need to read.
+    """
+    x, y, w, h = box
+    region = screen[y:y + h, x:x + w]
+    if region.size == 0:
+        return None
+    region = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+    best, best_score = None, floor
+    for digit, template in digit_templates.items():
+        gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        if gray.shape[0] > region.shape[0] or gray.shape[1] > region.shape[1]:
+            continue
+        score = float(cv2.matchTemplate(region, gray,
+                                        cv2.TM_CCOEFF_NORMED).max())
+        if score > best_score:
+            best, best_score = digit, score
+    return best
+
+
+def travel_view(screen: np.ndarray) -> np.ndarray:
+    """Shrink a screenshot down to just "the world" - ready for camera_shift.
+
+    We keep the middle band of the arena (away from the joystick, the
+    buttons and the score bar - those never move, and would fool the
+    shift detector into thinking WE never move) and squeeze it into a
+    tiny grey postcard. Tiny pictures compare fast.
+    """
+    height, width = screen.shape[:2]
+    band = screen[int(height * 0.18):int(height * 0.65),
+                  int(width * 0.22):int(width * 0.78)]
+    gray = cv2.cvtColor(band, cv2.COLOR_BGR2GRAY)
+    return cv2.resize(gray, (256, 128)).astype(np.float32)
+
+
+def camera_shift(before: np.ndarray, after: np.ndarray) -> float:
+    """How far did the world slide between two looks (in postcard pixels)?
+
+    In Brawl Stars the camera follows US. So when we walk, the whole
+    arena slides past. phaseCorrelate slides one picture over the other
+    until they line up best and tells us how far it had to slide -
+    if that's (almost) zero right after a joystick push, we didn't
+    actually move. Hello, wall.
+    """
+    (dx, dy), _strength = cv2.phaseCorrelate(before, after)
+    return float((dx * dx + dy * dy) ** 0.5)
 
 
 def find(screen: np.ndarray, template: np.ndarray, threshold: float = 0.85) -> Match | None:

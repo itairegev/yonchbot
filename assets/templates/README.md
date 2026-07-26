@@ -10,7 +10,8 @@ screen resolution, or the matching scores drop.)
 | File name | What to crop | It proves we're on... |
 |---|---|---|
 | `play_button.png` | the yellow PLAY button | the lobby |
-| `in_match.png` | something that ONLY shows during a match — the ammo bar or the super button works well | a match |
+| `in_match.png` | the skull attack button while it's BLUE (out of ammo) | a match |
+| `in_match_ready.png` | the same skull button while it's YELLOW (loaded) — yes, both! The button changes color, and the bot must recognize the match either way | a match |
 | `match_end.png` | the EXIT or CONTINUE button on the defeat/victory screen | the end screen |
 | `rewards.png` | the "tap to continue" text on the token/reward screen | the rewards screen |
 | `spectate_exit.png` | the small Exit button while watching another player after you die | spectator mode |

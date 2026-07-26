@@ -12,6 +12,14 @@ def test_recognizes_every_screen(templates_dir, fake_screens):
     assert detector.which_screen(fake_screens["rewards"]) == Screen.REWARDS
 
 
+def test_recognizes_match_with_full_ammo(templates_dir, fake_screens):
+    """The bug of 2026-07-19: in_match.png showed the attack button in its
+    EMPTY (blue) state, so a bot that never shot was never "in a match" -
+    it stood frozen all game. The loaded (yellow) button must count too."""
+    detector = ScreenDetector(templates_dir)
+    assert detector.which_screen(fake_screens["in_match_ready"]) == Screen.IN_MATCH
+
+
 def test_mystery_screen_is_unknown(templates_dir, fake_screens):
     detector = ScreenDetector(templates_dir)
     assert detector.which_screen(fake_screens["mystery"]) == Screen.UNKNOWN
@@ -21,7 +29,7 @@ def test_reports_missing_templates(tmp_path):
     empty_dir = tmp_path / "no_templates_here"
     empty_dir.mkdir()
     detector = ScreenDetector(empty_dir)
-    assert len(detector.missing_templates) == 7
+    assert len(detector.missing_templates) == 8
 
 
 def test_finds_where_the_play_button_is(templates_dir, fake_screens):

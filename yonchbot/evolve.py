@@ -26,8 +26,8 @@ from pathlib import Path
 # may try. Small menus on purpose: fewer choices = faster learning.
 GENES: dict[str, list] = {
     "kick_range": [140, 220, 320],     # kick early, or dribble in close?
-    "shoot_range": [0.30, 0.45, 0.60], # picky sniper, or spray-happy?
-    "step_hold_ms": [220, 300, 420],   # twitchy little steps, or strides?
+    "shoot_range": [0.10, 0.12, 0.16], # how close before Edgar swings?
+    "step_hold_ms": [700, 900, 1100],  # shorter turns, or longer strides?
 }
 
 
@@ -40,11 +40,14 @@ def mutate(champion: dict, rng: random.Random) -> dict:
     return challenger
 
 
-def pick_winner(champion: dict, champ_wins: int,
-                challenger: dict, chall_wins: int) -> dict:
-    """More wins takes the crown. Ties go to the champion - a challenger
-    must PROVE it's better, not just equal."""
-    return challenger if chall_wins > champ_wins else champion
+def pick_winner(champion: dict, champ_score, challenger: dict, chall_score) -> dict:
+    """More points takes the crown. Ties go to the champion - a challenger
+    must PROVE it's better, not just equal.
+
+    "Points" beat raw wins here: with random teammates, win/loss is nearly
+    a coin flip over a handful of games, but goals scored and conceded
+    carry real signal every single game. (Session 7: measure what's dense!)"""
+    return challenger if chall_score > champ_score else champion
 
 
 class Evolution:
@@ -80,9 +83,9 @@ class Evolution:
                 f"{champion[changed]} -> {challenger[changed]}")
 
             champ_wins = play_games(champion, games_per_side)
-            say(f"   champion won {champ_wins}/{games_per_side}")
+            say(f"   champion scored {champ_wins} points in {games_per_side} games")
             chall_wins = play_games(challenger, games_per_side)
-            say(f"   challenger won {chall_wins}/{games_per_side}")
+            say(f"   challenger scored {chall_wins} points in {games_per_side} games")
 
             winner = pick_winner(champion, champ_wins, challenger, chall_wins)
             self._log(round_no, "champion", champion, champ_wins,

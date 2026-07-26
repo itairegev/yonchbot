@@ -259,6 +259,8 @@ def test_focus_fire_sticks_to_the_wounded_enemy(config):
 
 def test_leads_a_moving_target(config):
     """A running enemy gets shot at where they're GOING, not where they are."""
+    import math
+    import time
     from yonchbot import play
     device = ReplayDevice([make_screen(None), make_screen(None)])
 
@@ -266,6 +268,8 @@ def test_leads_a_moving_target(config):
     look1[100:112, 250:350] = (40, 20, 230)     # enemy at x=300...
     look1[70:85, 240:360] = (255, 255, 255)
     play.play_step(device, config, step=2, screenshot=look1)
+
+    time.sleep(0.3)   # speed is pixels per SECOND - let real time pass
 
     look2 = make_screen(None)
     look2[100:112, 450:550] = (40, 20, 230)     # ...now at x=500: running RIGHT
@@ -276,13 +280,19 @@ def test_leads_a_moving_target(config):
     shot = next(s for s in device.actions
                 if s[0] == "swipe" and (s[1], s[2]) == (550, 310))
     _, x1, y1, x2, y2, _ = shot
-    # aiming AT the enemy would slope up steeply; aiming AHEAD flattens it
     assert x2 > x1
-    assert (y1 - y2) < 0.2 * (x2 - x1)   # nearly flat = leading their run
+    # the shot's angle must sit FLATTER (further right) than a straight
+    # shot at where the enemy stands - that's the lead
+    aimed = math.degrees(math.atan2(y1 - y2, x2 - x1))
+    body = (500, 106 + round(360 * 0.075))
+    at_them = play.angle_towards((320, 180), body)
+    assert aimed < at_them - 1
 
 
-def test_football_mode_is_brave(config):
-    """In football there are respawns - so no kiting: hunt AND shoot."""
+def test_football_mode_runs_from_enemy_battles(config):
+    """Owner's plan (2026-07-25): 'run from enemy battles'. A lone enemy with
+    NO ball to contest is not a fight to win - it's a fight to AVOID. So the
+    bot picks fall_back and its feet move AWAY from the enemy, not toward it."""
     from yonchbot import play
     config["match"]["football"] = True
     device = ReplayDevice([make_screen(None)])
@@ -296,9 +306,8 @@ def test_football_mode_is_brave(config):
 
     walk = next(s for s in device.actions
                 if s[0] == "swipe" and (s[1], s[2]) == (100, 300))
-    shot = next(s for s in device.actions
-                if s[0] == "swipe" and (s[1], s[2]) == (550, 310))
     _, x1, y1, x2, y2, _ = walk
-    assert x2 > x1 and y2 < y1     # feet CHASE the enemy (no kiting here!)
-    _, x1, y1, x2, y2, _ = shot
-    assert x2 > x1 and y2 < y1     # while shooting them, obviously
+    # The enemy is UP the screen; fleeing means the feet move DOWN, away from
+    # it (y grows). This is the deliberate reversal of the old "brave" test.
+    # (We don't assert the x direction - a small strafe wiggle rides on top.)
+    assert y2 > y1     # feet RETREAT downward, away from the up-screen enemy

@@ -40,28 +40,42 @@ class Brain:
         # (the cards move around as new events unlock, so we look, not guess).
         self._football_banner = None
         self._football_card = None
+        self._football_card2 = None
         self._victory = None
         if config["match"].get("football"):
+            # (two card pictures: the events page shows Brawl Ball as a
+            # TALL card some days and a WIDE card on others - same game,
+            # different outfit. We know both faces.)
             for name, attr in [("football_banner.png", "_football_banner"),
                                ("football_card.png", "_football_card"),
+                               ("football_card2.png", "_football_card2"),
                                ("victory.png", "_victory")]:
                 path = detector.templates_dir / name
                 if path.exists():
                     setattr(self, attr, vision.load_template(path))
 
-        # The optional LEARNING pilot (see rl.py - the Karpathy method).
-        # When config match.pilot == "rl", a tiny neural net flies the
-        # brawler and learns from every win and loss. No rules, no help.
-        self.policy = None
+        # The score reader: two little digit pictures (0 and 1) and the
+        # boxes where each team's score lives. Brawl Ball ends at 2, and
+        # the victory banner covers that - so 0/1 is all we need to read.
+        self._digits = {}
+        for digit in (0, 1):
+            path = detector.templates_dir / f"score_{digit}.png"
+            if path.exists():
+                self._digits[digit] = vision.load_template(path)
+
+        # The optional LEARNING pilot (see rl.py - the Karpathy method,
+        # upgraded): when config match.pilot == "rl", a tiny neural net
+        # picks among the five play.py tactics and learns from shaped
+        # rewards - goals, possession, progress - not just win/loss.
+        self.pilot = None
         if config["match"].get("pilot") == "rl":
-            import numpy as np
             from . import rl
-            self._policy_path = Path(config["match"].get(
+            policy_path = Path(config.get("rl", {}).get(
                 "policy_path", "data/rl/policy.npz"))
-            self.policy = rl.TinyPolicy.load(self._policy_path) \
-                if self._policy_path.exists() else rl.TinyPolicy()
-            self._rl_rng = np.random.default_rng()
-            say(f"🧠 RL pilot aboard - {self.policy.episodes} games of experience.")
+            policy = rl.TinyPolicy.load(policy_path) \
+                if policy_path.exists() else rl.TinyPolicy()
+            self.pilot = rl.Pilot(policy, config, say=say)
+            say(f"🧠 RL pilot aboard - {policy.episodes} games of experience.")
 
         # memories about the current game
         self.steps_played = 0
@@ -102,9 +116,13 @@ class Brain:
                 self._collect_rewards()
             else:
                 self._handle_confusion(screenshot)
-                if self.confused_count >= give_up_after:
-                    self.say("🛑 I'm too confused. Stopping so we can look together.")
-                    break
+
+            # The give-up check lives OUTSIDE the branches: any situation
+            # may raise the confusion count (even the lobby, when the game
+            # mode can't be fixed) - and "I give up" must actually stop us.
+            if self.confused_count >= give_up_after:
+                self.say("🛑 I'm too confused. Stopping so we can look together.")
+                break
 
             self.device.wait(self.config["timing"]["seconds_between_looks"])
 
@@ -130,13 +148,21 @@ class Brain:
             self.device.wait(3)
             # Now the mode browser is open - FIND the Brawl Ball card and
             # tap it (cards move as events unlock, so eyes beat guesses).
-            browser = self.device.screenshot()
-            card = None
-            if self._football_card is not None:
-                card = vision.find(browser, self._football_card, 0.8)
+            card = self._find_football_card()
+            if card is None and "trophies_tab_spot" in self.config["match"]:
+                # New seasons open the browser on their own special page -
+                # the normal events hide under the TROPHIES tab. Go there.
+                self.device.tap(*self.config["match"]["trophies_tab_spot"])
+                self.device.wait(2)
+                card = self._find_football_card()
             if card:
                 self.device.tap(*card.center)
-            else:  # can't see the card - use the remembered spot and hope
+            else:
+                # Still nothing? A fresh season covers every event with a
+                # "NEW!" card. Tap the remembered spot TWICE: the first
+                # tap peels the cover, the second picks the event.
+                self.device.tap(*self.config["match"]["football_card_spot"])
+                self.device.wait(2)
                 self.device.tap(*self.config["match"]["football_card_spot"])
             self.device.wait(2)
             return
@@ -147,33 +173,81 @@ class Brain:
             self.say(f"🎮 Lobby! Pressing PLAY ({match.confidence:.0%} sure).")
             self.device.tap(*match.center)
 
+    def _find_football_card(self):
+        """Take a fresh look at the mode browser - is Brawl Ball visible?
+        Checks both of the card's outfits (tall and wide)."""
+        browser = self.device.screenshot()
+        for card in (self._football_card, self._football_card2):
+            if card is None:
+                continue
+            match = vision.find(browser, card, 0.8)
+            if match is not None:
+                return match
+        return None
+
+    def _read_scores(self, screenshot):
+        """Read the match score off the top bars: (ours, theirs) or None."""
+        if not self._digits or "score_left_box" not in self.config["match"]:
+            return None
+        ours = vision.read_score(screenshot,
+                                 self.config["match"]["score_left_box"],
+                                 self._digits)
+        theirs = vision.read_score(screenshot,
+                                   self.config["match"]["score_right_box"],
+                                   self._digits)
+        if ours is None or theirs is None:
+            return None
+        return (ours, theirs)
+
     def _play_one_step(self, screenshot) -> None:
         if self.steps_played == 0:
             self.say("⚔️  Match started! Time to play.")
-        if self.policy is not None:
-            from . import rl
-            x = rl.features_from(screenshot, self.config, carrying=False)
-            action = self.policy.act(x, self._rl_rng)
-            rl.do_action(self.device, self.config, action, screenshot)
+        scores = self._read_scores(screenshot)
+        if scores is not None:
+            self._last_scores = scores   # remembered for the diary
+        if self.pilot is not None:
+            ctx = play.see(screenshot, self.config, self.steps_played)
+            ctx["scores"], ctx["step"] = scores, self.steps_played
+            self.pilot.step(self.device, ctx, self.steps_played, scores)
             self.steps_played += 1
             return
-        # The screenshot rides along so play.py can hunt for red health bars.
+        # The screenshot rides along so play.py can hunt for red health
+        # bars - and the score rides along so it knows when to stall.
         play.play_step(self.device, self.config, self.steps_played,
-                       screenshot=screenshot)
+                       screenshot=screenshot, scores=scores)
         self.steps_played += 1
 
     def _finish_match(self, screenshot) -> None:
-        # Did we WIN? The end screen says so - and the diary keeps score,
-        # because "are we getting better?" deserves a real answer.
-        notes = ""
-        if self._victory is not None:
-            # The VICTORY banner slides in with an animation - our first
-            # glimpse of this screen is often too early. Wait a beat and
-            # take a fresh, settled look before judging the game.
-            self.device.wait(1.5)
+        # Did we WIN? Two witnesses get asked, in order of reliability:
+        #   1. The SCOREBOARD we read all game (whoever led, won) -
+        #      but a tie at our last look means we missed the decider.
+        #   2. The VICTORY banner. Careful: the first end screen is a
+        #      "GAME HIGHLIGHT" replay - the banner only appears AFTER
+        #      we tap onward. (We logged wins as losses for half a day
+        #      before catching that. Screenshots don't lie; assumptions do.)
+        won = None
+        scores = getattr(self, "_last_scores", None)
+        if scores is not None and scores[0] != scores[1]:
+            won = scores[0] > scores[1]
+
+        match = self.detector.find_landmark(screenshot, Screen.MATCH_END)
+        if match:
+            self.device.tap(*match.center)   # onward, past the highlight
+        if won is None and self._victory is not None:
+            self.device.wait(2.0)            # let the banner slide in
             settled = self.device.screenshot()
             won = vision.find(settled, self._victory, 0.65) is not None
+
+        notes = ""
+        if won is not None or self._victory is not None:
             notes = "WIN ⚽" if won else "loss"
+            if scores is not None:
+                # the diary keeps the score - the evolution lab judges
+                # champions by goals, not by coin-flip wins
+                notes += " {}-{}".format(*scores)
+            # ...and the punch count: hits WE landed are the one stat
+            # that grades OUR play alone, whatever the teammates did
+            notes += f" hits:{play.MEMORY['hits']}"
             self.say(f"🏁 Match over ({notes}) after {self.steps_played} steps.")
         else:
             self.say(f"🏁 Match over after {self.steps_played} steps. Writing it in the diary.")
@@ -183,15 +257,10 @@ class Brain:
             finished=True,
             notes=notes,
         )
-        if self.policy is not None and notes:
-            # The Karpathy moment: one number teaches the whole game.
-            self.policy.finish_episode(1.0 if "WIN" in notes else -1.0)
-            self.policy.episodes += 1
-            self.policy.save(self._policy_path)
-            self.say(f"🧠 Learned from game #{self.policy.episodes}.")
-        match = self.detector.find_landmark(screenshot, Screen.MATCH_END)
-        if match:
-            self.device.tap(*match.center)
+        if self.pilot is not None:
+            # The learning moment: grade the whole game and update the net.
+            self.pilot.finish(won)
+        self._last_scores = None
         self.steps_played = 0
         self.screens_seen = 0
 

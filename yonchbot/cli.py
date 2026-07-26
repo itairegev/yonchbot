@@ -165,14 +165,23 @@ def cmd_evolve(config: dict, rounds: int, games_per_side: int) -> None:
         subprocess.run([*adb, "monkey", "-p", "com.supercell.brawlstars", "1"],
                        capture_output=True)
 
-    def play_games(settings: dict, n: int) -> int:
+    def play_games(settings: dict, n: int) -> float:
+        """Play n games, return POINTS: 3 per win plus the goal difference.
+        (Goals carry signal every game; raw wins are a coin flip at small
+        counts - see docs/rl-approach-research.md.)"""
+        import re
         wake_the_phone()
         trial_config = {**config, "match": {**config["match"], **settings}}
         detector = make_detector(trial_config)
         before = len(diary.read_games())
         Brain(device, detector, diary, trial_config).run(max_games=n)
-        played = diary.read_games()[before:]
-        return sum(1 for g in played if "WIN" in g["notes"])
+        points = 0.0
+        for g in diary.read_games()[before:]:
+            points += 3.0 if "WIN" in g["notes"] else 0.0
+            score = re.search(r"(\d+)-(\d+)", g["notes"])
+            if score:
+                points += int(score.group(1)) - int(score.group(2))
+        return points
 
     champion = {gene: config["match"][gene] for gene in GENES}
     print(f"🧬 Evolution: {rounds} rounds x {2 * games_per_side} games. "
@@ -186,11 +195,35 @@ def cmd_evolve(config: dict, rounds: int, games_per_side: int) -> None:
 
 def cmd_train(config: dict, games: int) -> None:
     """Let the RL pilot (rl.py - the Karpathy method) fly and LEARN."""
+    from . import rl
     from .brain import Brain
     from .progress import Diary
 
-    trial = {**config, "match": {**config["match"], "pilot": "rl",
-             "policy_path": str(PROJECT_ROOT / "data" / "rl" / "policy.npz")}}
+    rl_cfg = {**config.get("rl", {})}
+    for key, default in [("policy_path", "data/rl/policy.npz"),
+                         ("demos_path", "data/rl/demos.jsonl"),
+                         ("human_demos_path", "data/rl/human_demos.jsonl")]:
+        rl_cfg[key] = str(PROJECT_ROOT / rl_cfg.get(key, default))
+    trial = {**config, "rl": rl_cfg,
+             "match": {**config["match"], "pilot": "rl"}}
+
+    # Before the first real game, the pilot STUDIES the rulebook's diary
+    # and any converted human recordings (behavior cloning) - deviating
+    # from good beats inventing from zero.
+    policy_path = Path(rl_cfg["policy_path"])
+    if not policy_path.exists():
+        demos = rl.load_all_demos(trial)
+        if len(demos) < 500:
+            print(f"📚 Only {len(demos)} diary lines so far - the pilot needs "
+                  "~500+ to study. Run `play` a few games first (the rule "
+                  "bot writes its diary automatically), then `train` again.")
+            return
+        policy = rl.TinyPolicy()
+        accuracy = policy.study(demos, passes=20)
+        policy.save(policy_path)
+        print(f"📚 Studied {len(demos)} rulebook moments - "
+              f"copies the veteran {accuracy:.0%} of the time. Now: games!")
+
     device = make_device(trial)
     detector = make_detector(trial)
     diary = Diary(PROJECT_ROOT / trial["diary"]["csv_path"])

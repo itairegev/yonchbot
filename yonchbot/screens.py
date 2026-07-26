@@ -41,6 +41,11 @@ LANDMARKS = [
     (Screen.MATCH_END, "lets_go.png"),
     (Screen.SPECTATE, "spectate_exit.png"),
     (Screen.REWARDS, "rewards.png"),
+    # The attack button is our "we're in a match" landmark - but it
+    # changes color! Yellow when loaded, blue when out of ammo. We need
+    # BOTH pictures: with only the blue one, a bot that hadn't shot yet
+    # was never "in a match"... so it never shot. Frozen all game!
+    (Screen.IN_MATCH, "in_match_ready.png"),
     (Screen.IN_MATCH, "in_match.png"),
     (Screen.LOBBY, "play_button.png"),
 ]
@@ -55,6 +60,10 @@ class ScreenDetector:
         # A list of (screen, template) pairs - a screen can have several.
         self._entries: list[tuple[Screen, np.ndarray]] = []
         self._loaded_files: set[str] = set()
+        # Buttons never move - so once we find one, we write down WHERE.
+        # Next time we peek at that little spot first instead of combing
+        # the whole screen. Same answers, ~50x less work per look.
+        self._known_spots: dict[int, tuple[int, int]] = {}
         for screen, filename in LANDMARKS:
             path = self.templates_dir / filename
             if path.exists():
@@ -68,10 +77,27 @@ class ScreenDetector:
 
     def which_screen(self, screenshot: np.ndarray) -> Screen:
         """Look at a screenshot and say which screen it is."""
-        for screen, template in self._entries:
-            if vision.find(screenshot, template, self.threshold) is not None:
+        # FAST look first: check each landmark's remembered spot.
+        for i, (screen, template) in enumerate(self._entries):
+            spot = self._known_spots.get(i)
+            if spot is not None and self._found_near(screenshot, template, spot):
+                return screen
+        # SLOW look: comb the whole screen - and remember what we find.
+        for i, (screen, template) in enumerate(self._entries):
+            match = vision.find(screenshot, template, self.threshold)
+            if match is not None:
+                self._known_spots[i] = (match.x, match.y)
                 return screen
         return Screen.UNKNOWN
+
+    def _found_near(self, screenshot: np.ndarray, template: np.ndarray,
+                    spot: tuple[int, int], wiggle: int = 60) -> bool:
+        """Is the template still at (or near) where we last saw it?"""
+        x, y = spot
+        h, w = template.shape[:2]
+        window = screenshot[max(0, y - wiggle):y + h + wiggle,
+                            max(0, x - wiggle):x + w + wiggle]
+        return vision.find(window, template, self.threshold) is not None
 
     def find_landmark(self, screenshot: np.ndarray, screen: Screen):
         """Find WHERE a screen's landmark is (so we can tap it)."""

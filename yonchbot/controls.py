@@ -25,13 +25,17 @@ def tap(device, x: int, y: int) -> None:
 
 
 def joystick_push(device, anchor: tuple[int, int], angle_degrees: float,
-                  distance: int = 150, hold_ms: int = 900) -> None:
+                  distance: int = 150, hold_ms: int = 900,
+                  wait: bool = False) -> None:
     """Push the movement joystick in a direction.
 
     anchor        = where the joystick sits on screen (from config.yaml)
     angle_degrees = which way to walk (see the compass above)
     distance      = how far to push (further = walk at full speed)
     hold_ms       = how long to hold the push (longer = walk longer)
+    wait          = False means "start walking and let me keep thinking" -
+                    the push runs in the background while the bot takes
+                    its next look at the screen
     """
     ax, ay = anchor
     # Trigonometry! cos gives the left-right part of the direction,
@@ -41,7 +45,7 @@ def joystick_push(device, anchor: tuple[int, int], angle_degrees: float,
     # and int() would chop 99.999... down to 99. Computers, eh?
     end_x = round(ax + distance * math.cos(radians))
     end_y = round(ay - distance * math.sin(radians))
-    device.swipe(ax, ay, end_x, end_y, ms=hold_ms)
+    device.swipe(ax, ay, end_x, end_y, ms=hold_ms, wait=wait)
 
 
 def attack(device, button: tuple[int, int]) -> None:
